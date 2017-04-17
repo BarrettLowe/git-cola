@@ -15,6 +15,7 @@ from ..i18n import N_
 from ..interaction import Interaction
 from ..models import prefs
 from ..settings import Settings
+from .. import apc_interface
 from .. import cmds
 from .. import core
 from .. import guicmds
@@ -322,6 +323,11 @@ class MainView(standard.MainWindow):
         self.branch_review_action = add_action(
             self, N_('Review...'), guicmds.review_branch)
 
+        self.review_ticket_action = add_action(
+            self, N_('Review...'), guicmds.review_ticket)
+        self.create_ticket_action = add_action(
+            self, N_('Create...'), apc_interface.create_ticket)
+
         self.browse_action = add_action(
             self, N_('File Browser...'),
             lambda: browse.worktree_browser(show=True))
@@ -447,6 +453,14 @@ class MainView(standard.MainWindow):
         self.branch_menu.addAction(self.visualize_current_action)
         self.branch_menu.addAction(self.visualize_all_action)
         self.menubar.addAction(self.branch_menu.menuAction())
+
+        # Ticket Menu
+        self.ticket_menu = create_menu(N_('Ticket'), self.menubar)
+        self.ticket_menu.addAction(self.review_ticket_action)
+        self.ticket_menu.addSeparator()
+        self.ticket_menu.addAction(self.create_ticket_action)
+        self.ticket_menu.addSeparator()
+        self.menubar.addAction(self.ticket_menu.menuAction())
 
         # Rebase menu
         self.rebase_menu = create_menu(N_('Rebase'), self.actions_menu)

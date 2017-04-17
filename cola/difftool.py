@@ -3,6 +3,7 @@ from __future__ import division, absolute_import, unicode_literals
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 
+from . import apc_interface
 from . import cmds
 from . import gitcmds
 from . import hotkeys
@@ -15,6 +16,13 @@ from .widgets import defs
 from .widgets import filetree
 from .widgets import standard
 
+
+def diff_tickets(parent, a, b):
+    """Show a dialog for diffing a ticket from its most recent branch point"""
+    dlg = TicketDiffTool(parent, a=a, b=b)
+    dlg.show()
+    dlg.raise_()
+    return dlg.exec_() == QtWidgets.QDialog.Accepted
 
 def diff_commits(parent, a, b):
     """Show a dialog for diffing two commits"""
@@ -38,6 +46,7 @@ def diff_expression(parent, expr,
     dlg.show()
     dlg.raise_()
     return dlg.exec_() == QtWidgets.QDialog.Accepted
+
 
 
 class Difftool(standard.Dialog):
@@ -104,7 +113,7 @@ class Difftool(standard.Dialog):
 
         qtutils.connect_button(self.diff_button, self.diff)
         qtutils.connect_button(self.diff_all_button,
-                               lambda: self.diff(dir_diff=True))
+                               lambda: self.diff(dir_diff=True, diff_all=True))
         qtutils.connect_button(self.edit_button, self.edit)
         qtutils.connect_button(self.close_button, self.close)
 
@@ -163,8 +172,8 @@ class Difftool(standard.Dialog):
         left, right = self._left_right_args()
         cmds.difftool_launch(left=left, right=right, paths=[path])
 
-    def diff(self, dir_diff=False):
-        paths = self.tree.selected_filenames()
+    def diff(self, dir_diff=False, diff_all=None):
+        paths = None if diff_all else self.tree.selected_filenames()
         left, right = self._left_right_args()
         cmds.difftool_launch(left=left, right=right, paths=paths,
                              dir_diff=dir_diff)
@@ -183,3 +192,93 @@ class Difftool(standard.Dialog):
     def edit(self):
         paths = self.tree.selected_filenames()
         cmds.do(cmds.Edit, paths)
+
+
+class TicketDiffTool(Difftool):
+    def __init__(self, parent, a=None, b=None, expr=None, title=None,
+                 hide_expr=False, focus_tree=False):
+        """Show files with differences and launch difftool"""
+
+        self.ticketNum = b
+
+        standard.Dialog.__init__(self, parent=parent)
+
+        self.a = a
+        self.b = b
+        self.diff_expr = expr
+
+        if title is None:
+            title = N_('git-cola diff')
+
+        self.setWindowTitle(title)
+        self.setWindowModality(Qt.WindowModal)
+
+        self.expr = completion.GitRefLineEdit(parent=self)
+        if expr is not None:
+            self.expr.setText(expr)
+
+        if expr is None or hide_expr:
+            self.expr.hide()
+
+        self.tree = filetree.FileTree(parent=self)
+
+        self.diff_button = qtutils.create_button(text=N_('Compare'),
+                                                 icon=icons.diff(),
+                                                 enabled=False,
+                                                 default=True)
+        self.diff_button.setShortcut(hotkeys.DIFF)
+
+        self.approve_button = qtutils.create_button(text=N_('Approve Ticket'), icon=icons.star())
+        qtutils.connect_button(self.approve_button, self.approve)
+
+        self.diff_all_button = qtutils.create_button(text=N_('Compare All'),
+                                                     icon=icons.diff())
+        self.edit_button = qtutils.edit_button()
+        self.edit_button.setShortcut(hotkeys.EDIT)
+
+        self.close_button = qtutils.close_button()
+
+        self.button_layout = qtutils.hbox(defs.no_margin, defs.spacing,
+                                          self.close_button,
+                                          qtutils.STRETCH,
+                                          self.approve_button,
+                                          self.edit_button,
+                                          self.diff_all_button,
+                                          self.diff_button)
+
+        self.main_layout = qtutils.vbox(defs.margin, defs.spacing,
+                                        self.expr, self.tree,
+                                        self.button_layout)
+        self.setLayout(self.main_layout)
+
+        self.tree.itemSelectionChanged.connect(self.tree_selection_changed)
+        self.tree.itemDoubleClicked.connect(self.tree_double_clicked)
+        self.tree.up.connect(self.focus_input)
+
+        self.expr.textChanged.connect(self.text_changed)
+
+        self.expr.activated.connect(self.focus_tree)
+        self.expr.down.connect(self.focus_tree)
+        self.expr.enter.connect(self.focus_tree)
+
+        qtutils.connect_button(self.diff_button, self.diff)
+        qtutils.connect_button(self.diff_all_button,
+                               lambda: self.diff(dir_diff=True, diff_all=True))
+        qtutils.connect_button(self.edit_button, self.edit)
+        qtutils.connect_button(self.close_button, self.close)
+
+        qtutils.add_action(self, 'Focus Input', self.focus_input, hotkeys.FOCUS)
+        qtutils.add_action(self, 'Diff All', lambda: self.diff(dir_diff=True),
+                           hotkeys.CTRL_ENTER, hotkeys.CTRL_RETURN)
+        qtutils.add_close_action(self)
+
+        self.init_state(None, self.resize_widget, parent)
+
+        self.refresh()
+        if focus_tree:
+            self.focus_tree()
+
+
+    def approve(self):
+        apc_interface.approve_ticket(self.ticketNum)
+

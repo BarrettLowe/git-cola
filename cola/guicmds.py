@@ -245,6 +245,14 @@ def review_branch():
     merge_base = gitcmds.merge_base_parent(branch)
     difftool.diff_commits(qtutils.active_window(), merge_base, branch)
 
+def review_ticket():
+    """Diff against a ticket branch returned from a webservice."""
+    branch = choose_remote_branch(N_('Select Remote Branch'), N_('Review'))
+    if not branch:
+        return
+    merge_base = gitcmds.merge_base('remotes/origin/master', branch)
+    difftool.diff_tickets(qtutils.active_window(), merge_base, branch)
+
 
 class CloneTask(qtutils.Task):
     """Clones a Git repository"""
